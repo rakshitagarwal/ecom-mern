@@ -6,12 +6,13 @@ const sendEmail = require("../utils/sendEmail");
 const crypto = require("crypto");
 
 exports.registerUser = catchAsyncErrors(async (req, res, next) => {
-  const { name, email, password } = req.body;
+  const { name, email, password,role } = req.body;
 
   const user = await User.create({
     name,
     email,
     password,
+    role,
     avatar: {
       public_id: "this is a sample id",
       url: "profilepicUrl",
@@ -27,13 +28,14 @@ exports.loginUser = catchAsyncErrors(async (req, res, next) => {
     return next(new ErrorHandler("Please enter email or password", 400));
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email }).select("+password");
 
   if (!user) {
     return next(new ErrorHandler("Invalid email or password", 401));
   }
 
   const isPasswordmatched = await user.comparePassword(password);
+
   if (!isPasswordmatched) {
     return next(new ErrorHandler("Invalid email or password", 401));
   }
@@ -118,3 +120,75 @@ exports.resetPassword = catchAsyncErrors(async (req, res, next) => {
 
   sendToken(user, 200, res);
 });
+
+// get user details
+exports.getUserDetails = catchAsyncErrors(async (req, res, next) => {
+  const user = await User.findById(req.user.id);
+
+  res.status(200).json({
+    success: true,
+    user,
+  });
+});
+
+//update user password
+exports.updatePassword = catchAsyncErrors(async (req, res, next) => {
+  const user = await User.findById(req.user.id).select("+password");
+
+  const isPasswordmatched = await user.comparePassword(req.body.oldPassword);
+
+  if (!isPasswordmatched) {
+    return next(new ErrorHandler("old password is incorrect", 400));
+  }
+  if (req.body.newPassword !== req.body.confirmPassword) {
+    return next(new ErrorHandler("password does not match", 400));
+  }
+
+  user.password = req.body.newPassword;
+  await user.save();
+
+  sendToken(user, 200, res);
+});
+
+//update user profile
+exports.updateProfile = catchAsyncErrors(async (req, res, next) => {
+  const newUserdata = {
+    name: req.body.name,
+    email: req.body.email,
+  };
+  const user = await User.findByIdAndUpdate(req.user.id, newUserdata, {
+    new: true,
+    runValidators: true,
+    useFindAndModify: false,
+  });
+
+  res.status(200).json({
+    success: true,
+  });
+});
+
+
+
+//get all users
+exports.getAllUser = catchAsyncErrors(async (req,res,next)=>{
+  const users = await User.find();
+
+  res.status(200).json({
+    success: true,
+    users
+  })
+})
+
+//get one user
+exports.getSingleUser = catchAsyncErrors(async (req,res,next)=>{
+  const user = await User.findById(req.params.id);
+
+  if(!user){
+    return next(new ErrorHandler(`user does not exist with id: ${req.params.id}`))
+  }
+
+  res.status(200).json({
+    success: true,
+    user
+  })
+})
